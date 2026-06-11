@@ -1,0 +1,597 @@
+{
+  "name": "BriefIQ AI",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "This workflow automatically generates a daily AI-powered meeting briefing by extracting external meetings from the calendar, researching attendees and organizations using LLMs and web search, consolidating insights, and delivering a concise executive summary to Slack before the start of the workday.\n\nSchedule Trigger\nAutomatically starts the workflow every weekday at 6:00 AM to prepare meeting intelligence before the workday begins.\n\nGet many events\nRetrieves all calendar events scheduled for the current day from Google Calendar.\n\nFilter External Meetings\nIdentifies and retains only meetings involving external participants such as clients, prospects, vendors, or partners.\n\nHas External Meetings?\nChecks whether any external meetings are available for processing and routes the workflow accordingly.\n\nNo Meetings Message\nSends a Slack notification indicating that no external meetings are scheduled for the day.\n\nSplit Events for Individual Processing\nSeparates the meeting list into individual records so each meeting can be researched independently.\n\nFilter\nRemoves meetings that do not require research and keeps only relevant meetings for briefing generation.\n\nAI Agent – Meeting Researcher\nActs as the central orchestrator. It analyzes meeting details, identifies attendees and organizations, and determines what information should be researched.\n\nGoogle Gemini Chat Model\nProvides contextual understanding of meeting participants, companies, and business relationships.\n\nGroq Chat Model\nPerforms fast reasoning and summarization to generate concise meeting insights.\n\nWeb Research Tool\nCollects publicly available information such as company profiles, recent news, funding updates, leadership changes, products, and industry developments.\n\nClean Meeting Research Content\nRemoves duplicate information, irrelevant details, and formatting inconsistencies from research results.\n\nAggregate Research Results\nCombines research findings from all meetings into a single structured dataset.\n\nFormat Daily Meeting Brief\nTransforms aggregated insights into a professional executive briefing with key talking points and recommendations.\n\nGroq Chat Model 1\nRefines the final output, ensuring clarity, consistency, and executive-level readability.\n\nSend Daily Brief to Slack\nDelivers the completed meeting brief to Slack so stakeholders can review it before their meetings begin.",
+        "height": 917,
+        "width": 696,
+        "color": 5
+      },
+      "id": "5a367261-b56f-49f7-a447-43f82af7c428",
+      "name": "Sticky Note",
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        368,
+        240
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "cronExpression",
+              "expression": "0 6 * * 1-5"
+            }
+          ]
+        }
+      },
+      "id": "2409b8bd-2305-41fa-82f1-a97e68d9df43",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [
+        1392,
+        672
+      ],
+      "notesInFlow": true,
+      "typeVersion": 1.2,
+      "notes": "Runs Monday-Friday at 6 AM"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "filter-external",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ ($json.attendees || []).length }}",
+              "rightValue": 1
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "edb6a777-cc4d-4326-9418-6b311a69e3dd",
+      "name": "Filter External Meetings",
+      "type": "n8n-nodes-base.filter",
+      "position": [
+        1840,
+        672
+      ],
+      "typeVersion": 2.2,
+      "alwaysOutputData": true,
+      "notes": "Keep only events with attendees"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "version": 2,
+            "leftValue": "",
+            "caseSensitive": true,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "has-meetings",
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              },
+              "leftValue": "={{ ($json.attendees || []).length }}",
+              "rightValue": 1
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2f8d687c-ce54-4a8b-93d9-86ca545fcdd7",
+      "name": "Has External Meetings?",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        2064,
+        672
+      ],
+      "typeVersion": 2.2
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "C0B6Y8XFFQX",
+          "mode": "id"
+        },
+        "text": "No external meetings found for today.",
+        "otherOptions": {}
+      },
+      "id": "a9b3151a-62f3-4b74-b590-62ce0381c755",
+      "name": "No Meetings Message",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        2288,
+        768
+      ],
+      "webhookId": "f924f962-e870-44d5-ac44-60f9ed4f49d4",
+      "typeVersion": 2.3,
+      "credentials": {
+        "slackApi": {
+          "id": "iAqlf0LqhlHxezME",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fieldToSplitOut": "id",
+        "include": "allOtherFields",
+        "options": {}
+      },
+      "id": "001125d5-7aac-4aa3-a3d3-42b1f660b557",
+      "name": "Split Events for Individual Processing",
+      "type": "n8n-nodes-base.splitOut",
+      "position": [
+        2288,
+        576
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are an AI-Powered Sales Intelligence Assistant.\n\nYour goal is to prepare sales teams before customer meetings by researching companies, stakeholders, business signals, technology landscape, and potential opportunities.\n\n==================================================\nMANDATORY RULES\n==================================================\n\n1. NEVER invent people, companies, funding rounds, news, roles, acquisitions, or partnerships.\n\n2. ONLY use:\n   - Calendar event details\n   - Attendee information\n   - Meeting title\n   - Meeting description\n   - Results returned from web_research\n\n3. If information cannot be found, return:\n   Not Found\n\n4. Ignore personal events such as:\n   - Birthday\n   - Anniversary\n   - Holiday\n   - Vacation\n   - Leave\n   - Family event\n   - Personal reminder\n\n==================================================\nMEETING DETAILS\n==================================================\n\nMeeting Title:\n{{ $json.summary }}\n\nStart Time:\n{{ $json.start.dateTime || $json.start.date }}\n\nEnd Time:\n{{ $json.end.dateTime || $json.end.date }}\n\nOrganizer:\n{{ $json.organizer.email }}\n\nAttendees:\n{{ $json.attendees.map(a => a.email).join(', ') }}\n\nDescription:\n{{ $json.description || 'No description available' }}\n\n==================================================\nSTEP 1 - DETERMINE IF BUSINESS MEETING\n==================================================\n\nIf title contains:\n\nbirthday\nanniversary\nholiday\nvacation\nleave\nfamily\npersonal\n\nReturn:\n\nSKIP_MEETING\n\nand stop processing.\n\n==================================================\nSTEP 2 - IDENTIFY COMPANY\n==================================================\n\nDetermine company using this priority:\n\n1. Company email domains\n2. Meeting title\n3. Meeting description\n\nExamples:\n\nMeeting:\nZoho Business Meeting Call\n\nCompany:\nZoho\n\nMeeting:\nSalesforce Discovery Call\n\nCompany:\nSalesforce\n\nMeeting:\nIBM Partnership Discussion\n\nCompany:\nIBM\n\nIf company cannot be identified:\n\nCompany = Not Found\n\n==================================================\nSTEP 3 - MANDATORY WEB RESEARCH\n==================================================\n\nBefore generating any report, ALWAYS call:\n\nweb_research\n\nPerform searches for:\n\n[Company Name] company overview\n\n[Company Name] industry\n\n[Company Name] headquarters\n\n[Company Name] employee count\n\n[Company Name] recent news\n\n[Company Name] funding\n\n[Company Name] acquisitions\n\n[Company Name] partnerships\n\n[Company Name] leadership changes\n\n[Company Name] layoffs\n\n[Company Name] expansion\n\n[Company Name] product launches\n\n[Company Name] competitors\n\n[Company Name] CRM\n\n[Company Name] technology stack\n\nDO NOT generate report until web_research has been used.\n\n==================================================\nSTEP 4 - EXTRACT INFORMATION\n==================================================\n\nCompany Snapshot\n\n- Industry\n- Headquarters\n- Employee Count\n- Overview\n- Products\n- Services\n\nStrategic Signals\n\n- Funding\n- Acquisitions\n- Partnerships\n- Expansion\n- Product Launches\n- Layoffs\n- Leadership Changes\n\nTechnology Landscape\n\n- CRM\n- Sales Tools\n- Marketing Tools\n- Analytics Tools\n- Competitors\n\nCustomer & Stakeholder Context\n\n- Key Stakeholders\n- Responsibilities\n- Priorities\n- Pain Points\n- Business Objectives\n\nBuying Signals\n\n- AI Initiatives\n- CRM Modernization\n- Digital Transformation\n- Hiring Growth\n- Technology Investments\n\n==================================================\nSTEP 5 - SALES RECOMMENDATIONS\n==================================================\n\nGenerate:\n\n1. Recommended Talking Points\n2. Recommended Discovery Questions\n3. Risks\n4. Recommended Next Action\n\n==================================================\nOUTPUT FORMAT\n==================================================\n\nMeeting:\n[Meeting Title]\n\nDate:\n[Date]\n\nTime:\n[Time]\n\nAttendees:\n[List]\n\nCompany Snapshot:\n\nIndustry:\n[Value]\n\nHeadquarters:\n[Value]\n\nEmployees:\n[Value]\n\nOverview:\n[Value]\n\nProducts & Services:\n- Item 1\n- Item 2\n- Item 3\n\nRecent News:\n- News 1\n- News 2\n- News 3\n\nStrategic Signals:\n\nFunding:\n[Value]\n\nAcquisitions:\n[Value]\n\nPartnerships:\n[Value]\n\nExpansion:\n[Value]\n\nProduct Launches:\n[Value]\n\nLayoffs:\n[Value]\n\nLeadership Changes:\n[Value]\n\nTechnology Landscape:\n\nCRM:\n[Value]\n\nSales Tools:\n[Value]\n\nAnalytics:\n[Value]\n\nCompetitors:\n[Value]\n\nCustomer & Stakeholder Context:\n\nResponsibilities:\n[Value]\n\nInfluence Level:\n[Value]\n\nPriorities:\n[Value]\n\nPain Points:\n[Value]\n\nBuying Signals:\n\n- Signal 1\n- Signal 2\n- Signal 3\n\nRecommended Talking Points:\n\n- Point 1\n- Point 2\n- Point 3\n\nRecommended Questions:\n\n- Question 1\n- Question 2\n- Question 3\n- Question 4\n- Question 5\n\nRisks:\n\n- Risk 1\n- Risk 2\n\nRecommended Next Action:\n\n- Action\n\nConfidence:\nHigh / Medium / Low",
+        "options": {
+          "systemMessage": "You are an expert meeting preparation assistant with access to CRM, email, calendar, and company research tools. Your goal is to help the user be fully prepared for their upcoming meetings by providing comprehensive research and context."
+        }
+      },
+      "id": "f815d71c-0f8b-4221-a980-da233b22eb79",
+      "name": "AI Agent - Meeting Research",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "position": [
+        2736,
+        576
+      ],
+      "typeVersion": 2.2,
+      "retryOnFail": true,
+      "waitBetweenTries": 2000,
+      "maxTries": 3
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item, index) => {\n  let content = item.json.markdown_content || item.json.output || item.json.content || '';\n  \n  content = content.replace(/\"/g, '');\n  content = content.replace(/'/g, '');\n  content = content.replace(/\\r\\n/g, '\\n');\n  content = content.replace(/\\r/g, '\\n');\n  content = content.trim();\n  content = content.split(/\\n/).map(line => line.trim()).join('\\n');\n  content = content.replace(/\\n\\s*\\n\\s*\\n/g, '\\n\\n');\n  \n  return {\n    json: {\n      ...item.json,\n      cleaned_content: content\n    },\n    pairedItem: { item: index }\n  };\n});"
+      },
+      "id": "a052e367-d9c3-412a-be03-2ec28f0bafe6",
+      "name": "Clean Meeting Research Content",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        3088,
+        576
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "output"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "5cb71809-ea9b-49e4-a031-e151edf05981",
+      "name": "Aggregate Research Results",
+      "type": "n8n-nodes-base.aggregate",
+      "position": [
+        3312,
+        576
+      ],
+      "typeVersion": 1
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=You are a Senior Sales Intelligence Assistant.\n\nConvert the meeting research into a concise executive briefing for Slack.\n\nRULES\n\n* Use only information provided in the research.\n* Never invent people, companies, funding, acquisitions, or news.\n* Do not display personal email addresses.\n* If stakeholder names or roles are unavailable, write:\n  \"Not Identified\"\n* Focus on actionable business intelligence.\n* Keep output concise and executive-friendly.\n* Highlight strategic signals and buying signals.\n* Prioritize business relevance over generic company descriptions.\n\nINPUT\n\n{{ $json.output[0] }}\n\nOUTPUT FORMAT\n\n📅 Meeting:\n[Meeting Name]\n\n🏢 Company Snapshot\n• Company: [Company]\n• Industry: [Industry]\n• Headquarters: [Headquarters]\n• Employees: [Employees]\n\n🎯 Why This Meeting Matters\n[2-3 sentence business-focused summary explaining why the company is relevant, what strategic developments are occurring, and why the conversation is important.]\n\n👥 Customer & Stakeholder Context\n• Key Stakeholders: Not Identified\n• Stakeholder Influence: Not Identified\n• Likely Priorities:\n\n* Priority 1\n* Priority 2\n* Priority 3\n\n📰 Recent News\n• News Item 1\n• News Item 2\n• News Item 3\n\n🚨 Strategic Signals\n• Funding: [Value]\n• Acquisitions: [Value]\n• Partnerships: [Value]\n• Leadership Changes: [Value]\n• Product Launches: [Value]\n• Expansion: [Value]\n• Layoffs: [Value]\n\n🛠 Technology Landscape\n• CRM: [Value]\n• Sales Tools: [Value]\n• Analytics: [Value]\n• Competitors: [Value]\n\n💰 Buying Signals\n• Signal 1\n• Signal 2\n• Signal 3\n\n💡 Recommended Talking Points\n• Talking Point 1\n• Talking Point 2\n• Talking Point 3\n\n❓ Discovery Questions\n• What are the company's top strategic priorities over the next 12 months?\n• Which business initiatives are receiving the highest investment today?\n• How is the company leveraging AI and automation across its operations?\n• What challenges are customers currently facing?\n• What capabilities or partnerships are most important for future growth?\n\n⚠ Risks & Opportunities\n• Risk 1\n• Risk 2\n• Opportunity 1\n• Opportunity 2\n\n✅ Recommended Action\nProvide a specific next-step recommendation focused on partnership opportunities, technology adoption, digital transformation initiatives, or business growth objectives.\n\n🎯 Confidence\nHigh / Medium / Low\n",
+        "batching": {}
+      },
+      "id": "87e79d10-28e4-46a4-8e77-c13d4f034af2",
+      "name": "Format Daily Meeting Brief",
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "position": [
+        3536,
+        576
+      ],
+      "typeVersion": 1.7
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "=C0B6Y8XFFQX",
+          "mode": "id"
+        },
+        "text": "={{ $json.text }}",
+        "otherOptions": {}
+      },
+      "id": "049bb3cf-26ac-4c2e-88cf-60f0f5de1111",
+      "name": "Send Daily Brief to Slack",
+      "type": "n8n-nodes-base.slack",
+      "position": [
+        3888,
+        576
+      ],
+      "webhookId": "105e0e19-d9e9-4944-a9ea-587d2987cf0c",
+      "typeVersion": 2.3,
+      "credentials": {
+        "slackApi": {
+          "id": "iAqlf0LqhlHxezME",
+          "name": "Slack account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        2608,
+        800
+      ],
+      "id": "23f4404e-5706-4ed4-8029-fd35e8fa5d4e",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ICcKW4qj5zHZ9NR2",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "calendar": {
+          "__rl": true,
+          "value": "anishkanekar98@gmail.com",
+          "mode": "list",
+          "cachedResultName": "anishkanekar98@gmail.com"
+        },
+        "timeMin": "={{ $now.startOf('day') }}",
+        "timeMax": "={{ $now.plus({ days: 7 }).endOf('day') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1.3,
+      "position": [
+        1616,
+        672
+      ],
+      "id": "9d2feb7d-691b-4fc7-8f51-5db4bf6d651b",
+      "name": "Get many events",
+      "credentials": {
+        "googleCalendarOAuth2Api": {
+          "id": "sjsgoFUUGveDRQ7w",
+          "name": "Google Calendar account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "4afd8145-6b5f-4d33-affa-34164ab0e259",
+              "leftValue": "={{ $json.summary }}",
+              "rightValue": "Call",
+              "operator": {
+                "type": "string",
+                "operation": "regex"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        2512,
+        576
+      ],
+      "id": "f56878ed-dfab-4a52-8420-5d98e7e95b68",
+      "name": "Filter"
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        2784,
+        816
+      ],
+      "id": "64a9ae0d-1097-4e2e-832a-260dfb3bc1ae",
+      "name": "Groq Chat Model",
+      "credentials": {
+        "groqApi": {
+          "id": "zElIeEaL6exQas4j",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "meta-llama/llama-4-scout-17b-16e-instruct",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        3616,
+        800
+      ],
+      "id": "d1de8fbb-6610-446e-904e-ee27c28d32a7",
+      "name": "Groq Chat Model1",
+      "credentials": {
+        "groqApi": {
+          "id": "zElIeEaL6exQas4j",
+          "name": "Groq account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "toolDescription": "Search the internet for factual company information.\n\nUse this tool for:\n\n* Company overview\n* Products and services\n* Funding rounds\n* Acquisitions\n* Partnerships\n* Leadership changes\n* Product launches\n* Layoffs\n* Expansion plans\n* Employee count\n* Revenue\n* Industry information\n* Recent company news\n* Competitor analysis\n* Technology stack\n\nAlways search before generating company research.\n\nNever use example companies.\n\nNever generate fictional information.\n\nReturn only factual information found through web search.\n",
+        "method": "POST",
+        "url": "https://google.serper.dev/search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-KEY",
+              "value": "b151c80e395407e867fb4b19bbacaf9f6e84f53e"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"q\": \"{{ $fromAI('search_query') }}\"\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequestTool",
+      "typeVersion": 4.4,
+      "position": [
+        2992,
+        800
+      ],
+      "id": "0aa3a39a-13c6-4e37-9fd5-8423a27000e0",
+      "name": "Web Research Tool"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash-lite",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1,
+      "position": [
+        3456,
+        800
+      ],
+      "id": "3cd067b5-d48b-4b11-9155-63fe79dcb69b",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "ICcKW4qj5zHZ9NR2",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get many events",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has External Meetings?": {
+      "main": [
+        [
+          {
+            "node": "Split Events for Individual Processing",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Meetings Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter External Meetings": {
+      "main": [
+        [
+          {
+            "node": "Has External Meetings?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Research Results": {
+      "main": [
+        [
+          {
+            "node": "Format Daily Meeting Brief",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Daily Meeting Brief": {
+      "main": [
+        [
+          {
+            "node": "Send Daily Brief to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent - Meeting Research": {
+      "main": [
+        [
+          {
+            "node": "Clean Meeting Research Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clean Meeting Research Content": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Research Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Events for Individual Processing": {
+      "main": [
+        [
+          {
+            "node": "Filter",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Get many events": {
+      "main": [
+        [
+          {
+            "node": "Filter External Meetings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Filter": {
+      "main": [
+        [
+          {
+            "node": "AI Agent - Meeting Research",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent - Meeting Research",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model1": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Web Research Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent - Meeting Research",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Format Daily Meeting Brief",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "availableInMCP": false
+  },
+  "versionId": "b3af0a13-e218-4391-906b-8b48491c86c5",
+  "meta": {
+    "templateId": "7968",
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2a5fe9a88fe3390f1665da6f94c655c9467973efe7da1e8b79695f261f121e20"
+  },
+  "id": "S0rehrtQz6znHdjF",
+  "tags": []
+}
